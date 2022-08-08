@@ -1,0 +1,324 @@
+---
+Title: "Logistic regression"
+Author: "Jake Blatt"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("pacman")
+```
+
+#package installation 
+```{r}
+library(pacman)
+pacman::p_load(pacman, tidyverse, dplyr, lubridate, caret, doSNOW, doParallel, roll)
+
+```
+
+#Loads in the master data set and converts the fcomp1 column to a factor
+```{r}
+master <- read.csv("C:\\Users\\624383\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\master.csv")
+master$datetime <- as.POSIXct(master$datetime,
+                                format="%m/%d/%Y %I:%M:%S %p", 
+                                tz="UTC")
+# master <- master%>%
+#   mutate(
+#     #create response variable of failures (0,1,2,3,4)
+#     fcomp_all = ifelse(fcomp1==1,1,
+#                        ifelse(fcomp2==1,2,
+#                               ifelse(fcomp3==1,3,
+#                                      ifelse(fcomp4==1,4,0)))))
+
+# master$fcomp_all <- as.factor(master$fcomp_all)
+
+## fixing the master data sheet to work better for ML ##
+
+#add last_error var
+#this var shows the most recent error message at time t for machine n
+master <- master%>%
+  group_by(machineID)%>%
+  dplyr::mutate(last_error = dplyr::lag(errorID,n=1,default=NA))%>%
+  ungroup()
+master <- master%>%fill(last_error, .direction="down")
+
+#convert useful factor/chr to num/int
+master <- master%>%
+  mutate(
+    #change model to num
+    model= ifelse(model=="model1",1,
+                       ifelse(model=="model2",2,
+                              ifelse(model=="model3",3,4))),
+    last_error = ifelse(last_error=="error1",1,
+                       ifelse(last_error=="error2",2,
+                              ifelse(last_error=="error3",3,
+                                      ifelse(last_error=="error4",4,
+                                              ifelse(last_error=="error5",5,0))))))
+
+master$fcomp1 <- as.factor(master$fcomp1)
+master$fcomp2 <- as.factor(master$fcomp2)
+master$fcomp3 <- as.factor(master$fcomp3)
+master$fcomp4 <- as.factor(master$fcomp4)
+master$model <- as.factor(master$model)
+master$error1 <- as.factor(master$error1)
+master$error2 <- as.factor(master$error2)
+master$error3 <- as.factor(master$error3)
+master$error4 <- as.factor(master$error4)
+master$error5 <- as.factor(master$error5)
+
+#removes extra cols and gets rid of NA values
+master <- subset(master, select = -c(datetime:failure))
+master <- subset(master, select = -c(machineID, maint_type, failure_no_dup, comp_maint_lag1:error_lag5))
+
+master[is.na(master)] = 0
+
+master$last_error <- as.factor(master$last_error)
+
+master <- subset(master, select = -c(comp1:comp4))
+
+# master <- subset(master, select = -c(fcomp1:fcomp4))
+
+master = master %>% 
+  mutate(
+         volt_rmean_24 = roll_mean(volt, width = 24, min_obs = 1),
+         rotate_rmean_24 = roll_mean(rotate, width = 24, min_obs = 1),
+         pressure_rmean_24 = roll_mean(pressure, width = 24, min_obs = 1),
+         vibe_rmean_24 = roll_mean(vibration, width = 24, min_obs = 1),
+         volt_rmean_48 = roll_mean(volt, width = 48, min_obs = 1),
+         rotate_rmean_48 = roll_mean(rotate, width = 48, min_obs = 1),
+         pressure_rmean_48 = roll_mean(pressure, width = 48, min_obs = 1),
+         vibe_rmean_48 = roll_mean(vibration, width = 48, min_obs = 1)
+         # volt_rmean_72 = roll_mean(volt, width = 72, min_obs = 1),
+         # volt_rmean_96 = roll_mean(volt, width = 96, min_obs = 1),
+         # volt_rmean_120 = roll_mean(volt, width = 120, min_obs = 1),
+         # volt_rmean_144 = roll_mean(volt, width = 144, min_obs = 1),
+         # volt_rmean_156 = roll_mean(volt, width = 156, min_obs = 1),
+)
+
+```
+
+#Comp 1 logistic regression
+```{r}
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+reduced1 <- subset(master, select = -c(age, error1:error4, last_error, volt_rmean_48, vibe_rmean_48))
+
+index <- createDataPartition(reduced1$fcomp1, p=.75, list=FALSE)
+train <- reduced1[index,]
+test <- reduced1[-index,]
+
+fitcontrol <- trainControl(
+  method = 'cv',
+  number = 10,
+  savePredictions = 'final',
+  sampling = "smote"
+) 
+
+
+glmFit1 <- train(fcomp1~., data=train, method='glm', trControl=fitcontrol)
+
+summary(glmFit1)
+
+glmFit1
+
+pred1 <- predict(glmFit1, newdata = test)
+
+confusionMatrix(reference = test$fcomp1, data = pred1)
+
+stopCluster(cl)
+
+end <- Sys.time()
+end-start
+```
+
+# Comp2 logistic regression
+```{r}
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+#reduced1 <- subset(master, select = -c(age, error1:error4, last_error, volt_rmean_48, vibe_rmean_48))
+reduced2 <- master
+
+index <- createDataPartition(reduced2$fcomp2, p=.75, list=FALSE)
+train <- reduced2[index,]
+test <- reduced2[-index,]
+
+fitcontrol <- trainControl(
+  method = 'cv',
+  number = 10,
+  savePredictions = 'final',
+  sampling = "smote"
+) 
+
+
+glmFit2 <- train(fcomp2~., data=train, method='glm', trControl=fitcontrol)
+
+summary(glmFit2)
+
+glmFit2
+
+pred2 <- predict(glmFit2, newdata = test)
+
+confusionMatrix(reference = test$fcomp2, data = pred2)
+
+stopCluster(cl)
+
+end <- Sys.time()
+end-start
+```
+
+
+# Comp3 logistic regression
+```{r}
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+#reduced1 <- subset(master, select = -c(age, error1:error4, last_error, volt_rmean_48, vibe_rmean_48))
+reduced3 <- master
+
+index <- createDataPartition(reduced3$fcomp3, p=.75, list=FALSE)
+train <- reduced3[index,]
+test <- reduced3[-index,]
+
+fitcontrol <- trainControl(
+  method = 'cv',
+  number = 10,
+  savePredictions = 'final',
+  sampling = "smote"
+) 
+
+
+glmFit3 <- train(fcomp3~., data=train, method='glm', trControl=fitcontrol)
+
+summary(glmFit3)
+
+glmFit3
+
+pred3 <- predict(glmFit3, newdata = test)
+
+confusionMatrix(reference = test$fcomp3, data = pred3)
+
+stopCluster(cl)
+
+end <- Sys.time()
+end-start
+```
+
+
+
+
+# Comp4 logistic regression
+```{r}
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+reduced4 <- subset(master, select = -c(volt, error2:error4, last_error, pressure_rmean_24))
+# reduced4 <- master
+
+index <- createDataPartition(reduced3$fcomp3, p=.75, list=FALSE)
+train <- reduced4[index,]
+test <- reduced4[-index,]
+
+fitcontrol <- trainControl(
+  method = 'cv',
+  number = 10,
+  savePredictions = 'final',
+  sampling = "smote"
+) 
+
+
+glmFit4 <- train(fcomp4~., data=train, method='glm', trControl=fitcontrol)
+
+summary(glmFit4)
+
+glmFit4
+
+pred4 <- predict(glmFit4, newdata = test)
+
+confusionMatrix(reference = test$fcomp4, data = pred4)
+
+stopCluster(cl)
+
+end <- Sys.time()
+end-start
+```
+# add this for svms
+```{r}
+master <- master%>%
+  mutate(
+    #create response variable of failures (0,1,2,3,4)
+    fcomp_all = ifelse(fcomp1==1,1,
+                       ifelse(fcomp2==1,2,
+                              ifelse(fcomp3==1,3,
+                                     ifelse(fcomp4==1,4,0)))))
+
+master$fcomp_all <- as.factor(master$fcomp_all)
+master <- subset(master, select = -c(fcomp1:fcomp4))
+
+
+```
+
+# SVM
+```{r}
+
+
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+index1 <- createDataPartition(master$fcomp_all, p=.15, list=FALSE)
+
+train1 <- master[index1,]
+test1 <- master[-index1,]
+
+train_control <- trainControl(method = "cv",
+                              number = 5,
+                              savePredictions = 'final',
+                              sampling = "up")
+#grid <- expand.grid(C = c(0,0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2,5))
+grid <- expand.grid(C = c(1, 1.5, 2, 3))
+
+svm1 <- train(fcomp_all~., 
+              data=train1, 
+              method='svmLinear', 
+              trControl=train_control, 
+              preProcess= c("center", "scale"),
+              tuneLength = 10,
+              tuneGrid = grid
+              )
+
+pred_svm <- predict(svm1, newdata = test1)
+
+
+confusionMatrix(reference = test1$fcomp_all, data = pred_svm)
+
+stopCluster(cl)
+
+end <- Sys.time()
+end-start
+
+svm1
+plot(svm1)
+
+```
+
+
+
+
+
+
+
+
+

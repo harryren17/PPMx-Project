@@ -1,0 +1,168 @@
+---
+title: "full part gbm"
+author: "hren"
+date: '2022-07-14'
+output: html_document
+---
+
+
+## R Markdown
+`
+
+#seed, packages
+```{r}
+set.seed(123)
+library(tidyverse)
+library(caret)
+library(ROSE)
+library(doParallel)
+library(doSNOW)
+library(roll)
+library(DataExplorer)
+library(randomForest)
+```
+
+#load data
+```{r}
+master<- read.csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\master.csv")
+```
+
+##transformations & preproccessing
+```{r}
+#add last_error var
+#this var shows the most recent error message at time t for machine n
+master <- master%>%
+  group_by(machineID)%>%
+  dplyr::mutate(last_error = dplyr::lag(errorID,n=1,default=NA))%>%
+  ungroup()
+master <- master%>%fill(last_error, .direction="down")
+
+#convert useful factor/chr to num/int
+master <- master%>%
+  mutate(
+    #change model to num
+    model= ifelse(model=="model1",1,
+                       ifelse(model=="model2",2,
+                              ifelse(model=="model3",3,4))),
+    #change last_error to num
+    last_error = ifelse(last_error=="error1",1,
+                       ifelse(last_error=="error2",2,
+                              ifelse(last_error=="error3",3,
+                                      ifelse(last_error=="error4",4,
+                                             ifelse(last_error=="error5",5,0))))),
+    #create response variable of failures (0,1,2,3,4)
+    fcomp_all = ifelse(fcomp1==1,1,
+                       ifelse(fcomp2==1,2,
+                              ifelse(fcomp3==1,3,
+                                     ifelse(fcomp4==1,4,0)))))
+
+#fill out NA values and convert response variable to factor
+master$last_error[is.na(master$last_error)] <- 0
+master$fcomp_all <- as.factor(master$fcomp_all)
+master$last_error <- as.factor(master$last_error)
+
+#add 24 & 48 hour rolling means for telemetry
+master = master %>% 
+  mutate(
+         #volt_rmean_24 = roll_mean(volt, width = 24, min_obs = 1),
+         #rotate_rmean_24 = roll_mean(rotate, width = 24, min_obs = 1),
+         #pressure_rmean_24 = roll_mean(pressure, width = 24, min_obs = 1),
+         #vibe_rmean_24 = roll_mean(vibration, width = 24, min_obs = 1),
+         volt_rmean_48 = roll_mean(volt, width = 48, min_obs = 1),
+         rotate_rmean_48 = roll_mean(rotate, width = 48, min_obs = 1),
+         pressure_rmean_48 = roll_mean(pressure, width = 48, min_obs = 1),
+         vibe_rmean_48 = roll_mean(vibration, width = 48, min_obs = 1)
+)
+
+#remove all useless,EDA only, or ancillary data for model building   
+master_model <- subset(master,select= -c(machineID,datetime,errorID,comp,failure,maint_type,failure_no_dup,
+                                 comp_maint_lag1,comp_maint_lag2,comp_maint_lag3,comp_maint_lag4,
+                                 error_lag1,error_lag2,error_lag3,error_lag4,error_lag5, comp1, comp2, comp3, comp4,
+                                 model, error1, error2, error3, error4, error5, age, fcomp1, fcomp2, fcomp3, fcomp4, volt,rotate,pressure,vibration))
+
+```
+## sampling
+```{r}
+start <-  Sys.time()
+
+#split dataset into train/test dfs
+train_index <-  createDataPartition(master_model$fcomp_all, p=.25, list=FALSE,times=1)
+ppmx_train <- master_model[ train_index,]
+ppmx_test <- master_model[-train_index,]
+
+end <- Sys.time()
+end-start
+```
+#model training (30 min + runtime, 12 cores)
+```{r}
+#train control
+fitControl = trainControl(method = "cv", 
+                          number = 5)
+#tuning grid
+rf_grid <- expand.grid(.mtry = c(6))
+
+#parallel proccessing and timing
+start <- Sys.time()
+cl=makeCluster(4,type="SOCK")
+registerDoSNOW(cl)
+
+#model training
+rf_6 <- train(fcomp_all ~ .,
+              data=ppmx_train,
+              method="rf",
+              preProcess= c('center','scale'),
+              trControl = fitControl,
+              tuneGrid = rf_grid)
+
+stopCluster(cl)
+end <- Sys.time()
+duration_train <- end-start
+duration_train
+
+#display results
+summary(rf_6)
+rf_6
+
+```
+```{r}
+#plot(rf_1)
+#plot(rf_2)
+#plot(rf_3)
+#plot(rf_6)
+```
+
+
+#prediction
+```{r}
+#predict test data
+ppmx_test$fcomp_all <- as.factor(ppmx_test$fcomp_all)
+ppmx_pred <- predict(rf_6,newdata= ppmx_test,type="prob")
+```
+
+#display outputs
+````{r}
+
+#adjust probability thresholds per part
+predictions <- cbind(data.frame(train_preds = ppmx_pred,ppmx_test$fcomp_all))
+predictions <- predictions%>% dplyr::select(-c("train_preds.0"))
+predictions <- predictions%>%
+  mutate(train_preds.1 = ifelse(train_preds.1>0.25,1,0),
+         train_preds.2 = ifelse(train_preds.2>0.25,1,0),
+         train_preds.3 = ifelse(train_preds.3>0.25,1,0),
+         train_preds.4 = ifelse(train_preds.4>0.25,1,0))
+predictions <- predictions%>%
+  mutate(train_pred_all= ifelse(train_preds.1==1,1,
+                                ifelse(train_preds.2==1,2,
+                                       ifelse(train_preds.3==1,3,
+                                              ifelse(train_preds.4==1,4,0)))))
+
+#display model results and confusion matrix
+#gbm_fit_50
+#summary(gbm_fit_50)
+confusionMatrix(as.factor(predictions$train_pred_all),as.factor(predictions$ppmx_test.fcomp_all))
+```
+
+#modle save (do not run)
+```{r}
+saveRDS(rf_4, "tuning_rf_model.rds")
+```

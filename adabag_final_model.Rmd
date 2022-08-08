@@ -1,0 +1,87 @@
+---
+title: "ada"
+author: "hren"
+date: '2022-07-21'
+output: html_document
+---
+This .rmd file trains and tests a bagged adaboost model for component 3
+failure (fcomp3)
+
+#Seed & packages
+```{r}
+set.seed(123)
+library(tidyverse)
+library(caret)
+library(doParallel)
+library(doSNOW)
+library(roll)
+library(DataExplorer)
+library(adabag)
+```
+
+#Load data (file names are for personal local data)
+```{r}
+#training data
+ppmx_train <- read.csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\final_train_data.csv")
+#testing data
+ppmx_test <- read.csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\final_test_data.csv")
+```
+
+#Model training (30 min + runtime, 4 cores)
+```{r}
+#convert response variable to factor
+ppmx_train$fcomp3 <- as.factor(ppmx_train$fcomp3)
+
+#train control
+fitControl = trainControl(method = "cv", 
+                          number = 5)
+#tuning grid
+ada_grid <- expand.grid(maxdepth = c(2),
+                       mfinal = c(50))
+
+#start parallel processing and timing
+start <- Sys.time()
+cl=makeCluster(4,type = "SOCK")
+registerDoSNOW(cl)
+
+#model training
+ada_model <- train(fcomp3 ~ .,
+              data = ppmx_train,
+              method = "AdaBag",
+              preProcess = c('center', 'scale'),
+              trControl = fitControl,
+              tuneGrid = ada_grid)
+
+#end parallel processing and timing
+stopCluster(cl)
+end <- Sys.time()
+duration_train <- end-start
+```
+
+#Prediction
+```{r}
+#predict test data
+ppmx_test$fcomp3 <- as.factor(ppmx_test$fcomp3)
+ppmx_pred_output <- predict(ada_model, newdata = ppmx_test, type = "prob")
+```
+
+#Display outputs
+````{r}
+#adjust probability thresholds per part
+predictions <- cbind(data.frame(train_preds = ppmx_pred_output, ppmx_test$fcomp3))
+predictions <- predictions %>% dplyr::select(-c("train_preds.0"))
+predictions <- predictions %>%
+  mutate(train_preds.1 = ifelse(train_preds.1 > 0.50, 1, 0))
+
+
+#display model results and confusion matrix
+ada_model
+summary(ada_model)
+confusionMatrix(as.factor(predictions$train_preds.1), 
+                as.factor(predictions$ppmx_test.fcomp3))
+```
+
+#Model save (do not run)
+```{r}
+saveRDS(ada_model, "adabag_final.rds")
+```

@@ -1,0 +1,239 @@
+---
+title: "FInal_EDA_harry"
+author: "hren"
+date: '2022-06-21'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+set.seed(123)
+library(tidyverse)
+library(factoextra)
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+master<- read.csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\master.csv")
+```
+
+
+```{r}
+#stacked % bar by model (see titles)
+ggplot(data= subset(master,!is.na(failure_no_dup)),aes(x=model))+
+  geom_bar(aes(fill=failure_no_dup),position="fill")+
+  labs(title = "% stacked component failure by model",
+       x= "model #",
+       y= "%")
+
+ggplot(data= subset(master,!is.na(comp)),aes(x=model))+
+  geom_bar(aes(fill=comp),position="fill")+
+  labs(title = "% stacked component maintenance by model",
+       x= "model #",
+       y= "%")
+
+ggplot(data= subset(master,!is.na(errorID)),aes(x=model))+
+  geom_bar(aes(fill=errorID),position="fill")+
+  labs(title = "% stacked error type by model",
+       x= "model #",
+       y= "%")
+```
+
+```{r}
+#violin/boxplots of telemetry readings by maintenance type
+
+ggplot(master,aes(x=comp,y=vibration,fill=maint_type))+
+  geom_violin()+
+  geom_boxplot(width=0.1)+
+  labs(title = "distribution of vibration for components",
+       x="component")
+
+ggplot(master,aes(x=comp,y=volt,fill=maint_type))+
+  geom_violin()+
+  geom_boxplot(width=0.1)+
+  labs(title = "distribution of volt for components",
+       x="component")
+
+ggplot(master,aes(x=comp,y=rotate,fill=maint_type))+
+  geom_violin()+
+  geom_boxplot(width=0.1)+
+  labs(title = "distribution of rotate for components",
+       x="component")
+
+ggplot(master,aes(x=comp,y=pressure,fill=maint_type))+
+  geom_violin()+
+  geom_boxplot(width=0.1)+
+  labs(title = "distribution of pressure for components",
+       x="component")
+```
+
+```{r}
+#t test between scheduled and unscheduled maintenance for each component:telemetry pair
+
+#comp1
+comp1_volt_fail_vals <- subset(master,fcomp1==1)$volt
+comp1_volt_no_fail_vals <- subset(master,fcomp1==0)$volt
+comp1_rotate_fail_vals <- subset(master,fcomp1==1)$rotate
+comp1_rotate_no_fail_vals <- subset(master,fcomp1==0)$rotate
+comp1_pressure_fail_vals <- subset(master,fcomp1==1)$pressure
+comp1_pressure_no_fail_vals <- subset(master,fcomp1==0)$pressure
+comp1_vibration_fail_vals <- subset(master,fcomp1==1)$vibration
+comp1_vibration_no_fail_vals <- subset(master,fcomp1==0)$vibration
+
+t.test(comp1_volt_fail_vals,comp1_volt_no_fail_vals)
+t.test(comp1_rotate_fail_vals,comp1_rotate_no_fail_vals)
+t.test(comp1_pressure_fail_vals,comp1_pressure_no_fail_vals)
+t.test(comp1_vibration_fail_vals,comp1_vibration_no_fail_vals)
+
+#comp2
+comp2_volt_fail_vals <- subset(master,fcomp2==1)$volt
+comp2_volt_no_fail_vals <- subset(master,fcomp2==0)$volt
+comp2_rotate_fail_vals <- subset(master,fcomp1==1)$rotate
+comp2_rotate_no_fail_vals <- subset(master,fcomp2==0)$rotate
+comp2_pressure_fail_vals <- subset(master,fcomp2==1)$pressure
+comp2_pressure_no_fail_vals <- subset(master,fcomp2==0)$pressure
+comp2_vibration_fail_vals <- subset(master,fcomp2==1)$vibration
+comp2_vibration_no_fail_vals <- subset(master,fcomp2==0)$vibration
+
+t.test(comp2_volt_fail_vals,comp2_volt_no_fail_vals)
+t.test(comp2_rotate_fail_vals,comp2_rotate_no_fail_vals)
+t.test(comp2_pressure_fail_vals,comp2_pressure_no_fail_vals)
+t.test(comp2_vibration_fail_vals,comp2_vibration_no_fail_vals)
+
+#comp3
+comp3_volt_fail_vals <- subset(master,fcomp3==1)$volt
+comp3_volt_no_fail_vals <- subset(master,fcomp3==0)$volt
+comp3_rotate_fail_vals <- subset(master,fcomp3==1)$rotate
+comp3_rotate_no_fail_vals <- subset(master,fcomp3==0)$rotate
+comp3_pressure_fail_vals <- subset(master,fcomp3==1)$pressure
+comp3_pressure_no_fail_vals <- subset(master,fcomp3==0)$pressure
+comp3_vibration_fail_vals <- subset(master,fcomp3==1)$vibration
+comp3_vibration_no_fail_vals <- subset(master,fcomp3==0)$vibration
+
+t.test(comp3_volt_fail_vals,comp3_volt_no_fail_vals)
+t.test(comp3_rotate_fail_vals,comp3_rotate_no_fail_vals)
+t.test(comp3_pressure_fail_vals,comp3_pressure_no_fail_vals)
+t.test(comp3_vibration_fail_vals,comp3_vibration_no_fail_vals)
+
+#comp4
+comp4_volt_fail_vals <- subset(master,fcomp4==1)$volt
+comp4_volt_no_fail_vals <- subset(master,fcomp4==0)$volt
+comp4_rotate_fail_vals <- subset(master,fcomp4==1)$rotate
+comp4_rotate_no_fail_vals <- subset(master,fcomp4==0)$rotate
+comp4_pressure_fail_vals <- subset(master,fcomp4==1)$pressure
+comp4_pressure_no_fail_vals <- subset(master,fcomp4==0)$pressure
+comp4_vibration_fail_vals <- subset(master,fcomp4==1)$vibration
+comp4_vibration_no_fail_vals <- subset(master,fcomp4==0)$vibration
+
+t.test(comp4_volt_fail_vals,comp4_volt_no_fail_vals)
+t.test(comp4_rotate_fail_vals,comp4_rotate_no_fail_vals)
+t.test(comp4_pressure_fail_vals,comp4_pressure_no_fail_vals)
+t.test(comp4_vibration_fail_vals,comp4_vibration_no_fail_vals)
+```
+
+```{r}
+#PCA on quant data
+
+#extract quant data
+master_quant_data <- master%>%
+  dplyr::select(volt:vibration,comp1_age:comp4_age)
+dim(master_quant_data)
+
+#tag na's as -1
+master_quant_data[is.na(master_quant_data)] = -1
+
+#create pca, standardize data
+master_pca <- prcomp(master_quant_data,
+                     center=TRUE,scale=TRUE)
+
+summary(master_pca)
+
+#proportion of variance by each component
+master_pc_matrix <- master_pca$x
+apply(master_pc_matrix, MARGIN=2,FUN=var)/
+  ncol(master_pc_matrix)
+
+#biplot visualization (takes like 2 minutes)
+fviz_pca_biplot(master_pca, label="var",
+                alpha.ind=.25,
+                alpha.var=.75,
+                col.var="yellow")
+```
+
+```{r}
+#mds by machine and by model 
+
+#random 10 machines with seed
+x = round(runif(10, min = 1, max = 100))
+randID = filter(master, machineID == x)
+
+#subset only quant vars
+randID_quant <- randID %>% dplyr::select(volt:vibration,comp1_age:comp4_age)
+#standardize
+randID_quant <- apply(randID_quant, MARGIN=2,
+                          FUN=function(x) x/sd(x))
+#dist matrix for first 5 datetimes for first machine
+dist(randID_quant[1:5,])
+
+#distance matrix for mds (takes like 5 minutes sry)
+randID_mds <- cmdscale(d=dist(randID_quant),k=2)
+```
+```{r}
+#add mds to randID
+randID <- randID %>%
+  mutate(mds1=randID_mds[,1], mds2 = randID_mds[,2])
+
+randID%>%
+  ggplot(aes(x=mds1,y=mds2))+
+  geom_point(alpha=0.25, aes(color=as.factor(model)))+
+  geom_density2d()
+
+randID%>%
+  ggplot(aes(x=mds1,y=mds2))+
+  geom_point(alpha=0.25, aes(color=as.factor(machineID)))+
+  geom_density2d()
+
+```
+```{r}
+randID%>%
+  ggplot(aes(x=comp1_age, y=volt, color = as.factor(fcomp1)))+
+  geom_point()+
+  facet_wrap(~fcomp1)
+```
+
+```{r}
+#pairs plot of telemetry
+  pairs(~volt+rotate+pressure+vibration+comp1_age, data = subset(master,error1==1))
+
+```
+
+#rpart tree testing (for fun)
+
+```{r}
+#tree_train <- subset(master, machineID == c(1:75))
+#tree_test <-  subset(master, machineID == c(76:100))
+
+error.tree <- rpart(failure ~ volt+rotate+pressure+vibration, data= master, method = "class")
+rpart.plot(error.tree, type=0, clip.right.labs=FALSE, branch=0.1, under=TRUE)
+
+error.tree.pred <- predict(error.tree,as.data.frame(master), type="class")
+table(error.tree.pred, master$failure)
+```
+
+
+```{r}
+ferror.tree <- rpart(errorID ~ volt+rotate+pressure+vibration, data= master, method = "class")
+rpart.plot(ferror.tree)
+
+#ferror.tree.pred <- predict(ferror.tree,as.data.frame(master), type="class")
+#table(ferror.tree.pred, master$fcomp1)
+```
+
+
+
+
+

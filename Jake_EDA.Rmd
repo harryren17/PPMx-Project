@@ -1,0 +1,309 @@
+---
+File: "Blatt Master EDA"
+author: "jblatt"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#packages
+library(tidyverse)
+library(dplyr)
+library (lubridate)
+install.packages("ggQC")
+library(ggQC)
+install.packages("ggcorrplot")
+library(ggcorrplot)
+```
+
+```{r}
+master <- read.csv("C:\\Users\\624383\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\master.csv")
+master$datetime <- as.POSIXct(master$datetime,
+                                format="%m/%d/%Y %I:%M:%S %p", 
+                                tz="UTC")
+```
+
+```{r}
+summary(master)
+```
+
+
+```{r}
+comp1ages <- c()
+comp1dates <- c()
+C1agecount <- c()
+for(i in 1:nrow(master)){
+  if(!is.na(master$comp_maint_lag1[i])){
+    comp1ages <- append(comp1ages, master$comp_maint_lag1[i])
+    comp1dates <- append(comp1dates, master$datetime[i])
+    #C1agecount <- append(C1agecount, master$comp1_age[i - 1] + 1)
+  }
+}
+dfc1 <- data.frame(C1age = comp1ages)
+#dfc1['C1AgeCounted'] <- C1agecount
+dfc1['C1date'] <- comp1dates
+
+
+print("Comp 1 ages mean, max, min")
+(mean(comp1ages))
+(max(comp1ages))
+(min(comp1ages))
+
+comp2ages <- c()
+comp2dates <- c()
+for(i in 1:nrow(master)){
+  if(!is.na(master$comp_maint_lag2[i])){
+    comp2ages <- append(comp2ages, master$comp_maint_lag2[i])
+    comp2dates <- append(comp2dates, master$datetime[i])
+  }
+}
+
+dfc2 <- data.frame(c2age = comp2ages)
+dfc2['C2date'] <- comp2dates
+print("Comp 2 ages mean, max, min")
+(mean(comp2ages))
+(max(comp2ages))
+(min(comp3ages))
+
+comp3ages <- c()
+comp3dates <- c()
+for(i in 1:nrow(master)){
+  if(!is.na(master$comp_maint_lag3[i])){
+    comp3ages <- append(comp3ages, master$comp_maint_lag3[i])
+    comp3dates <- append(comp3dates, master$datetime[i])
+  }
+}
+dfc3 <- data.frame(c3age = comp3ages)
+dfc3['C3date'] <- comp3dates
+
+print("Comp 3 ages mean, max, min")
+(mean(comp3ages))
+(max(comp3ages))
+(min(comp3ages))
+
+comp4ages <- c()
+comp4dates <- c()
+for(i in 1:nrow(master)){
+  if(!is.na(master$comp_maint_lag4[i])){
+    comp4ages <- append(comp4ages, master$comp_maint_lag4[i])
+    comp4dates <- append(comp4dates, master$datetime[i])
+  }
+}
+dfc4 <- data.frame(c4age = comp4ages)
+dfc4['C4date'] <- comp4dates
+
+print("Comp 4 ages mean, max, min")
+(mean(comp4ages))
+(max(comp4ages))
+(min(comp4ages))
+```
+
+
+```{r}
+
+comp1_frame <- data.frame(y = comp1ages)
+
+ggplot(comp1_frame, aes(x = 1:nrow(comp1_frame), y = y)) +
+  geom_point() + geom_line() + #add the points and lines
+  stat_QC(method = "XmR", #specify QC charting method
+          auto.label = T, # Use Autolabels
+          label.digits = 2, #Use two digit in the label
+          show.1n2.sigma = T  #Show 1 and two sigma lines
+          ) +  
+  stat_QC(method="mR") +
+  scale_x_continuous(expand =  expand_scale(mult = .15))  # Pad the x-axis
+
+
+
+comp2_frame <- data.frame(y = comp2ages)
+
+ggplot(comp2_frame, aes(x = 1:nrow(comp2_frame), y = y)) +
+  geom_point() + geom_line() + #add the points and lines
+  stat_QC(method = "XmR", #specify QC charting method
+          auto.label = T, # Use Autolabels
+          label.digits = 2, #Use two digit in the label
+          show.1n2.sigma = T  #Show 1 and two sigma lines
+          ) +  
+  stat_QC(method="mR") +
+  scale_x_continuous(expand =  expand_scale(mult = .15))  # Pad the x-axis
+
+
+
+
+comp3_frame <- data.frame(y = comp3ages)
+
+ggplot(comp3_frame, aes(x = 1:nrow(comp3_frame), y = y)) +
+  geom_point() + geom_line() + #add the points and lines
+  stat_QC(method = "XmR", #specify QC charting method
+          auto.label = T, # Use Autolabels
+          label.digits = 2, #Use two digit in the label
+          show.1n2.sigma = T  #Show 1 and two sigma lines
+          ) +  
+  stat_QC(method="mR") +
+  scale_x_continuous(expand =  expand_scale(mult = .15))  # Pad the x-axis
+
+
+
+
+comp4_frame <- data.frame(y = comp4ages)
+
+ggplot(comp4_frame, aes(x = 1:nrow(comp4_frame), y = y)) +
+  geom_point() + geom_line() + #add the points and lines
+  stat_QC(method = "XmR", #specify QC charting method
+          auto.label = T, # Use Autolabels
+          label.digits = 2, #Use two digit in the label
+          show.1n2.sigma = T  #Show 1 and two sigma lines
+          ) +  
+  stat_QC(method="mR") +
+  scale_x_continuous(expand =  expand_scale(mult = .15))  # Pad the x-axis
+  
+
+```
+
+
+
+```{r}
+
+m1 <- subset(master, machineID == 1)
+count <- 0
+for(val in m1$error1){
+  if(val == 1){
+    count <- count + 1
+  }
+}
+
+count
+
+```
+```{r}
+ggplot(master, aes(age)) +
+  geom_bar()
+```
+
+```{r}
+
+# erros by different ages
+ggplot(master[which(master$error1 > 0),], aes(x = age, y = error1)) + 
+  geom_col()
+ggplot(master[which(master$error2 > 0),], aes(x = age, y = error2)) + 
+  geom_col()
+ggplot(master[which(master$error3 > 0),], aes(x = age, y = error3)) + 
+  geom_col()
+ggplot(master[which(master$error4 > 0),], aes(x = age, y = error4)) + 
+  geom_col()
+ggplot(master[which(master$error5 > 0),], aes(x = age, y = error5)) + 
+  geom_col()
+
+```
+
+
+```{r}
+# maints by age
+
+ggplot(master[which(master$comp1 > 0),], aes(x = age, y = comp1)) + 
+  geom_col()
+ggplot(master[which(master$comp2 > 0),], aes(x = age, y = comp2)) + 
+  geom_col()
+ggplot(master[which(master$comp3 > 0),], aes(x = age, y = comp3)) + 
+  geom_col()
+ggplot(master[which(master$comp4 > 0),], aes(x = age, y = comp4)) + 
+  geom_col()
+
+
+```
+
+```{r}
+#age and error correlation
+
+AE <- data.frame(age = master$age)
+AE["error1"] <- master$error1
+AE["error2"] <- master$error2
+AE["error3"] <- master$error3
+AE["error4"] <- master$error4
+AE["error5"] <- master$error5
+
+cor(AE)
+ggcorrplot(cor(AE))
+
+
+```
+
+
+```{r}
+
+AM <- data.frame(age = master$age)
+AM["comp1"] <- master$comp1
+AM["comp2"] <- master$comp2
+AM["comp3"] <- master$comp3
+AM["comp4"] <- master$comp4
+
+
+cor(AM)
+ggcorrplot(cor(AM))
+
+
+```
+
+
+
+
+```{r}
+
+before <- 1000
+
+comp1fail <- 1537
+
+first_fail <- master[c((comp1fail - before):comp1fail),]
+
+first_fail <- first_fail %>% 
+  mutate(rec = 1) %>% 
+  mutate(voltroll = cumsum(volt)/cumsum(rec)) %>% 
+  mutate(rotroll = cumsum(rotate)/cumsum(rec)) %>% 
+  mutate(presroll = cumsum(pressure)/cumsum(rec)) %>% 
+  mutate(vibroll = cumsum(vibration)/cumsum(rec)) %>% 
+  select(-rec)
+
+
+x <- c(1: nrow(first_fail))
+
+ggplot(first_fail, aes(x = x, y = volt)) + 
+  geom_point() + 
+  geom_line(aes(x = x, y = voltroll), color = "red", size = 1.5)
+
+ggplot(first_fail, aes(x = x, y = pressure)) + 
+  geom_point() + 
+  geom_line(aes(x = x, y = presroll), color = "red", size = 1.5)
+
+ggplot(first_fail, aes(x = x, y = rotate)) + 
+  geom_point() + 
+  geom_line(aes(x = x, y = rotroll), color = "red", size = 1.5)
+
+ggplot(first_fail, aes(x = x, y = vibration)) + 
+  geom_point() + 
+  geom_line(aes(x = x, y = vibroll), color = "red", size = 1.5)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

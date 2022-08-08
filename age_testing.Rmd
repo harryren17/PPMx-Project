@@ -1,0 +1,258 @@
+---
+title: "age_testing"
+output: html_notebook
+---
+
+Load in the packages
+```{r}
+library(datasets)  # Load base packages manually
+
+if (!require("pacman")) install.packages("pacman")
+
+
+pacman::p_load(pacman, dplyr, GGally, ggplot2, ggthemes, ggvis, httr, 
+               lubridate, plotly, rio, rmarkdown, shiny, stringr, tidyr)
+
+
+errors <- import("C:\\Users\\624383\\Desktop\\PdM_errors.csv")
+machines <- import("C:\\Users\\624383\\Desktop\\PdM_machines.csv")
+telemetry <- import("C:\\Users\\624383\\Desktop\\PdM_telemetry.csv")
+maint <- import("C:\\Users\\624383\\Desktop\\PdM_maint.csv")
+failures <- import("C:\\Users\\624383\\Desktop\\PdM_failures.csv")
+
+fails <- failures %>% select(datetime, machineID, failure) %>%
+  mutate(comp1F = as.integer(failure == "comp1"),
+         comp2F = as.integer(failure == "comp2"),
+         comp3F = as.integer(failure == "comp3"),
+         comp4F = as.integer(failure == "comp4"))
+```
+
+
+Merge the test file
+```{r}
+age_test <- merge(telemetry, machines, by = 'machineID')
+age_test <- merge(age_test, fails, by = c('machineID','datetime'), all.x = TRUE)
+
+age_test <- age_test %>% group_by(machineID, datetime) %>% summarise_each(funs(max))
+
+# trim data down to just machine 1
+#age_test <- filter(age_test, (machineID == 1) || (machineID == 2) || (machineID == 3))
+age_test <- filter(age_test, (machineID == 1) || (machineID == 2) || (machineID == 3))
+
+```
+
+
+adds the age cols and sets to 0
+```{r}
+#hours <- 0
+
+#age_test['hour'] <- hours
+
+
+
+zeros <- 0 : 0
+
+age_test['comp1 Age'] <- zeros
+age_test['comp2 Age'] <- zeros
+age_test['comp3 Age'] <- zeros
+age_test['comp4 Age'] <- zeros
+```
+
+sorts the data set by machine ID and then date
+```{r}
+
+age_test[order(c(age_test$machineID, age_test$datetime)),]
+
+```
+
+Sets all of the fails to 0 when its NA
+```{r}
+age_test <- select(age_test, -(failure))
+age_test[is.na(age_test)] <- 0
+```
+
+
+Main algorithm to add the ages by hour
+```{r}
+
+#starting_ages <- c(10, 20, 30, 40)
+#starting_ages <- cbind(starting_ages, c(15, 25, 35, 45))
+#starting_ages <- cbind(starting_ages, c(17, 27, 37, 47))
+
+#starting_ages[1, 3]
+
+for(i in 1:3){
+  print(i)
+  #count <- 1
+  #age1 <- starting_ages[1, i]
+  #age2 <- starting_ages[2, i]
+  #age3 <- starting_ages[3, i]
+  #age4 <- starting_ages[4, i]
+  age1 <- 0
+  age2 <- 0
+  age3 <- 0
+  age4 <- 0
+  #while(count <= 8761){
+  for(j in 1:8761){
+    spot = j + (8761 * (i - 1))
+    if(age_test$comp1F[spot] == 1){
+      age1 <- 0
+    }
+    if(age_test$comp2F[spot] == 1){
+      age2 <- 0
+    }
+    if(age_test$comp3F[spot] == 1){
+      age3 <- 0
+    }
+    if(age_test$comp4F[spot] == 1){
+      age4 <- 0
+    }
+    age_test$`comp1 Age`[spot] <- age1
+    age_test$`comp2 Age`[spot] <- age2
+    age_test$`comp3 Age`[spot] <- age3
+    age_test$`comp4 Age`[spot] <- age4
+    #count <- count + 1
+    age1 <- age1 + 1
+    age2 <- age2 + 1
+    age3 <- age3 + 1
+    age4 <- age4 + 1
+  }
+}
+
+
+#comp_age = comps_2014 %>% 
+ # mutate(comp1age = ifelse(comp1m == 1, as.numeric(difftime(start, datetime, units = "hours")), 0)) %>% 
+  #mutate(comp2age = ifelse(comp2m == 1, as.numeric(difftime(start, datetime, units = "hours")), 0)) %>% 
+  #mutate(comp3age = ifelse(comp3m == 1, as.numeric(difftime(start, datetime, units = "hours")), 0)) %>% 
+  #mutate(comp4age = ifelse(comp4m == 1, as.numeric(difftime(start, datetime, units = "hours")), 0))
+
+
+#age_test <- select(age_test, -(failure))
+#age_test[is.na(age_test)] <- 0
+
+
+#age1 = 0
+#age_df <- age_test %>% 
+ # mutate('comp1 Age' = ifelse(comp1F == 1, 0, (age1 <- age1 + 1)))
+
+  
+
+
+```
+
+--------------------------------------------------------------------------------------------
+Everything below here is unused/testing code
+
+```{r}
+
+#spot <- 1
+
+for(i in 1:3){
+  count <- 1
+  print('reset')
+  age <- 0
+  print(age)
+  #while((age_test$machineID[spot] == i) && (spot < 26283)){
+  while(count <= 8761){
+    if((!is.na(age_test$comp1F[count])) && (age_test$comp1F[count] == 1) ){
+      age <- 0
+    }
+    age_test$`comp1 Age`[count + 8761 * (i-1)] <- age
+    count <- count + 1
+    age <- age + 1
+    #spot <- spot + 1
+  }
+}
+
+
+
+```
+
+calculates the age during each hour for comp 1
+```{r}
+count <- 1
+age <- 0
+
+while(count < 8760){
+  if(((!is.na(age_test$comp1F[count])) && (age_test$comp1F[count] == 1)) || (age_test$datetime == '2015-01-01 06:00:00')){
+    print(age_test$comp1F[count])
+    age <- 0
+  }
+  age_test$`comp1 Age`[count] <- age
+  count <- count + 1
+  age <- age + 1
+}
+```
+
+comp 2
+```{r}
+count <- 1
+age <- 0
+
+while(count < 8760){
+  if((!is.na(age_test$comp2F[count]) && (age_test$comp2F[count] == 1))){
+    age <- 0
+  }
+  age_test$`comp2 Age`[count] <- age
+  count <- count + 1
+  age <- age + 1
+}
+```
+
+comp3
+```{r}
+count <- 1
+age <- 0
+
+while(count < 8760){
+  if((!is.na(age_test$comp3F[count]) && (age_test$comp3F[count] == 1))){
+    age <- 0
+  }
+  age_test$`comp3 Age`[count] <- age
+  count <- count + 1
+  age <- age + 1
+}
+```
+
+comp4
+```{r}
+count <- 1
+age <- 0
+
+while(count < 8760){
+  if((!is.na(age_test$comp4F[count]) && (age_test$comp4F[count] == 1))){
+    age <- 0
+  }
+  age_test$`comp4 Age`[count] <- age
+  count <- count + 1
+  age <- age + 1
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

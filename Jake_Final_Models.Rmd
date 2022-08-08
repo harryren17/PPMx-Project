@@ -1,0 +1,119 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#package installation 
+```{r}
+library(pacman)
+pacman::p_load(pacman, tidyverse, dplyr, lubridate, caret, doSNOW, doParallel, roll)
+```
+
+# Load in the data (this data is all from my local computer)
+```{r}
+data <- read.csv("C:\\Users\\624383\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\final_model_data.csv")
+training <- read.csv("C:\\Users\\624383\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\final_train_data.csv")
+testing <- read.csv("C:\\Users\\624383\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\final_test_data.csv")
+
+# Set fcomp3 as a factor to be used in the model fitting
+data$fcomp3 <- as.factor(data$fcomp3)
+training$fcomp3 <- as.factor(training$fcomp3)
+testing$fcomp3 <- as.factor(testing$fcomp3)
+```
+
+# SVM model building
+```{r}
+# start time and parallel proccessing
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+# Splits the data into a 25/75 split 
+index <- createDataPartition(data$fcomp3, p=.25, list=FALSE)
+train <- data[index,]
+test <- data[-index,]
+
+# set the train control with 5 cross validations and up sampling
+train_control <- trainControl(method = "cv",
+                              number = 5,
+                              savePredictions = 'final',
+                              sampling = "up")
+# Set the svm C value to 1
+grid <- expand.grid(C = c(1))
+
+#train the model
+svm1 <- train(fcomp3~., 
+              data=train, 
+              method='svmLinear', 
+              trControl=train_control, 
+              preProcess= c("center", "scale"),
+              tuneLength = 10,
+              tuneGrid = grid
+              )
+
+# predict the model 
+pred_svm <- predict(svm1, newdata = test)
+
+svm1
+
+# get a confusion matrix 
+confusionMatrix(reference = test$fcomp3, data = pred_svm)
+
+# end parallel processing and timer
+stopCluster(cl)
+end <- Sys.time()
+end-start
+```
+
+# Comp3 logistic regression
+```{r}
+# start timing and parallel processing
+start <-  Sys.time()
+cl = makeCluster(8, type = "SOCK")
+registerDoSNOW(cl)
+set.seed(123)
+
+# sets the fit control with 5 cross validation and up sampling
+fitcontrol <- trainControl(
+  method = 'cv',
+  number = 5,
+  savePredictions = 'final',
+  sampling = "up"
+) 
+
+# trains the model
+glmFit <- train(fcomp3~., data=training, method='glm', trControl=fitcontrol)
+
+summary(glmFit)
+
+glmFit
+
+# predicts the model
+glmpred <- predict(glmFit, newdata = testing)
+
+# outputs the confusion matrix of the results
+confusionMatrix(reference = testing$fcomp3, data = glmpred)
+
+# stops parallel processing and timer
+stopCluster(cl)
+end <- Sys.time()
+end-start
+```
+
+#modle save
+```{r}
+saveRDS(svm1, "modelSVM.rds")
+saveRDS(glm, "modelGLM.rds")
+```
+
+
+
+
+
+
+

@@ -1,0 +1,206 @@
+---
+title: "EDA"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-06-09'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+#packadges
+library(tidyverse)
+library(dplyr)
+library (lubridate)
+library(ggseas)
+library(padr)
+#library(chron)
+```
+
+```{r}
+#Load Data
+failure<- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_failures.csv")
+maint<- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_maint.csv")
+machine <- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_machines.csv")
+
+failure <- failure %>%
+  mutate(datetime = mdy_hm(datetime))
+
+maint <- maint%>%
+  mutate(datetime = mdy_hm(datetime))
+
+
+#Join data to all_maint dataset
+all_maint <- merge(maint,failure, by = c('machineID','datetime'),all = TRUE)
+all_maint <- merge(all_maint,machine, by = c('machineID'),all = TRUE)
+
+#add vars
+#maint_type: scheduled or unscheduled maintenance
+#failure_no_dup: failure variable with duplicates from merge removed (need to find a better way to merge)
+all_maint <- mutate(all_maint,
+                    maint_type = ifelse(is.na(failure), "scheduled", 
+                                       ifelse(failure==comp,"unscheduled","scheduled")),
+                    failure_no_dup = ifelse(failure==comp, failure, NA))
+
+
+#change 'datetime' to date type
+#all_maint <- all_maint%>%
+  #mutate(datetime = mdy_hm(datetime))
+```
+```{r}
+all_maint<- subset(all_maint, datetime>ymd(20141231)) 
+```
+
+```{r}
+#n maintenance fixes by component, date, and fix type 
+#and means and sd of each component fix amount
+maint_sum  <- all_maint%>%
+  group_by(datetime, comp, maint_type) %>%
+  summarize(n_fixes = n())
+
+
+m1 <- mean(filter(maint_sum, comp %in% c("comp1"))$n_fixes)
+m2 <- mean(filter(maint_sum, comp %in% c("comp2"))$n_fixes)
+m3 <- mean(filter(maint_sum, comp %in% c("comp3"))$n_fixes)
+m4 <- mean(filter(maint_sum, comp %in% c("comp4"))$n_fixes)
+sd1 <- sd(filter(maint_sum, comp %in% c("comp1"))$n_fixes)
+sd2 <- sd(filter(maint_sum, comp %in% c("comp2"))$n_fixes)
+sd3 <- sd(filter(maint_sum, comp %in% c("comp3"))$n_fixes)
+sd4 <- sd(filter(maint_sum, comp %in% c("comp4"))$n_fixes)
+
+```
+
+```{r}
+#stacked bar chart
+ggplot(all_maint,aes(x=comp))+
+  geom_bar(aes(fill = maint_type))+
+  labs(title = "distribution of components by maintenance type",
+       x = "component #",
+       y = "Count of maintenance events",
+       fill = "Maintenance Type")
+
+#bar chart
+ggplot(subset(all_maint,!is.na(failure_no_dup)),aes(x=failure_no_dup))+
+  geom_bar(fill="darkblue")+
+  labs(title = "distribution of unscheduled component failures",
+       x = "component #",
+       y = "Count of failures")
+```
+
+```{r}
+#mosaic plot $ chi sq test
+tab1 <- table(all_maint$comp, all_maint$maint_type)
+mosaicplot(tab1,shade=TRUE)
+chisq.test(tab1)
+```
+
+```{r}
+
+#facet histogram
+ggplot(all_maint,aes(x=datetime,y=after_stat(count)))+
+  geom_histogram(aes(fill = maint_type))+
+  facet_wrap(~comp)+
+  labs(title="Time series of maintenance occurances faceted by component type",
+       x= "date & time",
+       y= "Count of maintenance events",
+       fill = "Maintenance type")
+
+#boxplots
+ggplot(maint_sum, aes(x=comp,y=n_fixes))+
+  geom_boxplot()+
+  coord_flip()+
+  labs(title = "Distribution of Number of component fixes/day")
+
+#scatterplot + moving window avg
+ggplot(maint_sum, aes(x=datetime,y=n_fixes))+
+  geom_point(color="red")+
+  stat_rollapplyr(width=12)+
+  facet_wrap(~comp)+
+  labs(title="Number of part fixes time series with rolling average",
+       x="date",
+       y="Number of Maintenance occurances")
+```
+
+```{r}
+maint_sum %>%
+  filter(!(comp %in% c("comp1"))) %>%
+  ggplot()+
+  geom_line(aes(x=datetime, y = n_fixes,group=comp),
+            color="gray",size=.5,alpha=.5)+
+  geom_line(data=filter(maint_sum, comp %in% c("comp1")),aes(x=datetime,y= n_fixes,color = comp),
+            size=0.75,alpha=1)+
+  geom_hline(yintercept=m1)+
+  geom_hline(yintercept=m1+sd1*2)+
+  geom_hline(yintercept=m1+sd1*-2)
+
+maint_sum %>%
+  filter(!(comp %in% c("comp2"))) %>%
+  ggplot()+
+  geom_line(aes(x=datetime, y = n_fixes,group=comp),
+            color="gray",size=.5,alpha=.5)+
+  geom_line(data=filter(maint_sum, comp %in% c("comp2")),aes(x=datetime,y= n_fixes,color = comp),
+            size=0.75,alpha=1)+
+  geom_hline(yintercept=m2)+
+  geom_hline(yintercept=m2+sd2*2)+
+  geom_hline(yintercept=m2+sd2*-2)
+
+maint_sum %>%
+  filter(!(comp %in% c("comp3"))) %>%
+  ggplot()+
+  geom_line(aes(x=datetime, y = n_fixes,group=comp),
+            color="gray",size=.5,alpha=.5)+
+  geom_line(data=filter(maint_sum, comp %in% c("comp3")),aes(x=datetime,y= n_fixes,color = comp),
+            size=0.75,alpha=1)+
+  geom_hline(yintercept=m3)+
+  geom_hline(yintercept=m3+sd3*2)+
+  geom_hline(yintercept=m3+sd3*-2)
+
+maint_sum %>%
+  filter(!(comp %in% c("comp4"))) %>%
+  ggplot()+
+  geom_line(aes(x=datetime, y = n_fixes,group=comp),
+            color="gray",size=.5,alpha=.5)+
+  geom_line(data=filter(maint_sum, comp %in% c("comp4")),aes(x=datetime,y= n_fixes,color = comp),
+            size=0.75,alpha=1)+
+  geom_hline(yintercept=m4)+
+  geom_hline(yintercept=m4+sd4*2)+
+  geom_hline(yintercept=m4+sd4*-2)
+  
+  
+  
+
+```
+```{r}
+
+maint_dplyr <-  all_maint%>%
+  group_by(machineID,comp)%>%
+  dplyr::mutate(lag1 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()
+
+(maint_dplyr$datetime-maint_dplyr$lag1)/86400
+```
+
+notes:
+pad0 maintenance dates?
+fix lag var
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

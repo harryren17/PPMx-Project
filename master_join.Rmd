@@ -1,0 +1,234 @@
+---
+title: "mass join"
+author: "hren", "jblatt"
+output: html_document
+date: '2022-06-13'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#packages
+library(tidyverse)
+library(dplyr)
+library (lubridate)
+```
+
+## Master data join & transform & clean
+
+```{r}
+#load data (use own links)
+failure<- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_failures.csv")
+maint<- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_maint.csv")
+machine <- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_machines.csv")
+errors <- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_errors.csv")
+tele <- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\PdM_telemetry.csv")
+starting_ages <- read_csv("C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\starting_ages.csv")
+
+#change datetime to date-time types before merge
+failure <- failure %>%
+  mutate(datetime = mdy_hm(datetime))
+maint <- maint%>%
+  mutate(datetime = mdy_hm(datetime))
+errors <- errors %>%
+  mutate(datetime = mdy_hm(datetime))
+tele <- tele%>%
+  mutate(datetime = mdy_hm(datetime))
+
+#merge datasets in this order: errors,maint,failure,tele,machine
+master <- merge(errors,maint, by = c('machineID','datetime'),all = TRUE)
+master <- merge(master,failure, by = c('machineID','datetime'),all = TRUE)
+master <- merge(master,tele, by = c('machineID','datetime'),all = TRUE)
+master <- merge(master,machine, by = c('machineID'),all=TRUE)
+
+#add vars
+#maint_type: scheduled or unscheduled maintenance
+#failure_no_dup: failure variable with duplicates from merge removed (need to remove failure col)
+master <- mutate(master,
+                    maint_type = ifelse(is.na(comp),NA, 
+                                    ifelse(is.na(failure), "scheduled", 
+                                       ifelse(failure==comp,"unscheduled","scheduled"))),
+                    failure_no_dup = ifelse(failure==comp, failure, NA))
+#comment
+#split error,comp, and failure into own cols
+master <- master %>% 
+  mutate(error1 = as.integer(errorID == "error1"),
+         error2 = as.integer(errorID == "error2"),
+         error3 = as.integer(errorID == "error3"),
+         error4 = as.integer(errorID == "error4"),
+         error5 = as.integer(errorID == "error5"),
+         comp1 = as.integer(comp == "comp1"),
+         comp2 = as.integer(comp == "comp2"),
+         comp3 = as.integer(comp == "comp3"),
+         comp4 = as.integer(comp == "comp4"),
+         fcomp1 = as.integer(failure == "comp1"),
+         fcomp2 = as.integer(failure == "comp2"),
+         fcomp3 = as.integer(failure == "comp3"),
+         fcomp4 = as.integer(failure == "comp4"))
+
+
+#filter out duplicate datetimes (consolidate error, maintenance, failure into 1 row)
+master = master %>% group_by(machineID, datetime) %>% summarise_each(funs(max))
+
+#replace na for split components with 0
+master <- master %>% mutate_at(c(14:26),~replace_na(.,0))
+```
+
+
+
+## ADD lag variables
+```{r}
+#Component 1 lag variable
+comp_lag1 <-  subset(master,comp1==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(comp_maint_lag1 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,comp_lag1[,c("machineID","datetime","comp_maint_lag1")], by=c("machineID","datetime"),all=TRUE)
+```
+```{r}
+#Component 2 lag variable
+comp_lag2 <-  subset(master,comp2==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(comp_maint_lag2 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,comp_lag2[,c("machineID","datetime","comp_maint_lag2")], by=c("machineID","datetime"),all=TRUE)
+
+#Component 3 lag variable
+comp_lag3 <-  subset(master,comp3==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(comp_maint_lag3 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,comp_lag3[,c("machineID","datetime","comp_maint_lag3")], by=c("machineID","datetime"),all=TRUE)
+
+#Component 4 lag variable
+comp_lag4 <-  subset(master,comp4==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(comp_maint_lag4 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,comp_lag4[,c("machineID","datetime","comp_maint_lag4")], by=c("machineID","datetime"),all=TRUE)
+
+#convert from date to "hours since"
+master$comp_maint_lag1 <-  as.numeric(master$datetime-master$comp_maint_lag1, units="hours")
+master$comp_maint_lag2 <-  as.numeric(master$datetime-master$comp_maint_lag2, units="hours")
+master$comp_maint_lag3 <-  as.numeric(master$datetime-master$comp_maint_lag3, units="hours")
+master$comp_maint_lag4 <-  as.numeric(master$datetime-master$comp_maint_lag4, units="hours")
+
+#error1 lag variable
+error_lag1 <-  subset(master,error1 == 1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(error_lag1 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,error_lag1[,c("machineID","datetime","error_lag1")], by=c("machineID","datetime"),all=TRUE)
+
+#error2 lag variable
+error_lag2 <-  subset(master,error2==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(error_lag2 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,error_lag2[,c("machineID","datetime","error_lag2")], by=c("machineID","datetime"),all=TRUE)
+
+#error3 lag variable
+error_lag3 <-  subset(master,error3==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(error_lag3 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,error_lag3[,c("machineID","datetime","error_lag3")], by=c("machineID","datetime"),all=TRUE)
+
+#error4 lag variable
+error_lag4 <-  subset(master,error4==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(error_lag4 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,error_lag4[,c("machineID","datetime","error_lag4")], by=c("machineID","datetime"),all=TRUE)
+
+#error5 lag variable
+error_lag5 <-  subset(master,error5==1)%>%
+  group_by(machineID)%>%
+  dplyr::mutate(error_lag5 = dplyr::lag(datetime, n=1, default=NA))%>%
+  as.data.frame()%>% 
+  ungroup()
+master <- merge(master,error_lag5[,c("machineID","datetime","error_lag5")], by=c("machineID","datetime"),all=TRUE)
+
+#convert from date to "hours since"
+master$error_lag1 <-  master$datetime-master$error_lag1
+master$error_lag2 <-  master$datetime-master$error_lag2
+master$error_lag3 <-  master$datetime-master$error_lag3
+master$error_lag4 <-  master$datetime-master$error_lag4
+master$error_lag5 <-  master$datetime-master$error_lag5
+```
+
+
+## Ages of each component assuming all ages start at 0
+```{r}
+
+starting_ages <- starting_ages %>% 
+  rename(dummy1=comp1, 
+         dummy2=comp2,
+         dummy3=comp3,
+         dummy4=comp4)
+
+master <- merge(master, starting_ages, by = c('machineID','datetime'), all.x = TRUE)
+master <- master %>% mutate_at(c(36:39), ~replace_na(.,1))
+
+master <- master %>% 
+  # groups by machine ID so that it resets after each machine instead of counting through
+  group_by(machineID) %>% 
+  # Creates cumsums of the fails so that we can group by how many fails there have been
+  mutate(
+         comp1_fail_count = cumsum(comp1),
+         comp2_fail_count = cumsum(comp2),
+         comp3_fail_count = cumsum(comp3),
+         comp4_fail_count = cumsum(comp4),
+  ) %>% 
+  ungroup() %>% 
+  # increments counts between fails by dummy_count magic
+  group_by(machineID, comp1_fail_count) %>% 
+  mutate(comp1_age=cumsum(dummy1)-1) %>% 
+  ungroup() %>% 
+  group_by(machineID, comp2_fail_count) %>% 
+  mutate(comp2_age=cumsum(dummy2)-1) %>% 
+  ungroup() %>% 
+  group_by(machineID, comp3_fail_count) %>% 
+  mutate(comp3_age=cumsum(dummy3)-1) %>% 
+  ungroup() %>% 
+  group_by(machineID, comp4_fail_count) %>% 
+  mutate(comp4_age=cumsum(dummy4)-1) %>% 
+  ungroup()
+
+
+```
+
+## Cleans up the tables by removing unnecessary cols
+```{r}
+master <- select(master, -(comp1_fail_count))
+master <- select(master, -(comp2_fail_count))
+master <- select(master, -(comp3_fail_count))
+master <- select(master, -(comp4_fail_count))
+master <- select(master, -(dummy1))
+master <- select(master, -(dummy2))
+master <- select(master, -(dummy3))
+master <- select(master, -(dummy4))
+```
+
+
+## Filter out 2014 data
+```{r}
+#remove 2014 dates
+master<- subset(master, datetime>ymd(20141231)) 
+```
+
+```{r}
+#write master df to csv
+write.csv(master,"C:\\Users\\624386\\BOOZ ALLEN HAMILTON\\Summer Games 2022 - Documents\\Raw Data\\master.csv", row.names =FALSE)
+```
+
