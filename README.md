@@ -1,4 +1,7 @@
 # PPMx-Project
+
+All code in this repo is owned by Booz Allen Hamilton
+
 Existing maintenance strategies have significant inefficiencies. Programs
 often replace parts too early, which increases costs, or replace parts too
 late, which decreases readiness while increasing the risk of machine
